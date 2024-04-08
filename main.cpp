@@ -47,25 +47,64 @@ public:
         this->resources.push_back(rcb);
     }
 };
-
+struct PR{
+    int process;
+    int resource;
+    PR(int p, int r){
+        process=p;
+        resource=r;
+    }
+};
 class RCB{
 private:
     int state;
-    int inventory;
-    deque<int> waitlist;
+    int freeInventory;
+    int UsingInventory;
+    //which process is holding how many recourses
+    deque<PR> resources;
+    //which process is waiting for how many resources
+    deque<PR> waitlist;
 public:
     RCB(){
+        //1 free
+        //0 allocated
         this->state = 1;
-        this->inventory = 0;
+        this->freeInventory = 0;
+        this->UsingInventory = 0;
     };
     void setInventory(int inventory){
-        this->inventory = inventory;
+        this->freeInventory = inventory;
+    }
+    //if no error, it can request
+    bool request(int process,int units){
+        PR pr(process, units);
+        if(canRequest(units)){
+            this->freeInventory -= units;
+            this->UsingInventory += units;
+            this->resources.push_back(pr);
+            return true;
+        }
+        addWaitlist(pr);  
+        return false;
+    }
+    bool canRequest(int request){
+        return this->freeInventory>=request;
+    }
+    int getFreeInventory(){
+        return this->freeInventory;
+    }
+    int getUsingInventory(){
+        return this->UsingInventory;
     }
     //erase the data
     void reset(){
         this->state = 1;
-        this->inventory = 0;
+        this->freeInventory = 0;
+        this->UsingInventory = 0;
         this->waitlist.clear();
+    }
+    void addWaitlist(PR pr){
+        this->waitlist.push_back(pr);
     }
 };
 
@@ -80,6 +119,7 @@ void getCommands(vector<string>& thisArgs, string str)
     }
         
 }
+
 class Manager{
 private:  
     PCB pcb[16];
@@ -104,25 +144,6 @@ public:
     void increIndexProc(){
         this->indexProcess++;
     }
-    void create(int level){
-        //allocate new PCB[j]
-        //state = ready
-        pcb[this->indexProcess].setState(1);
-        //insert j into list of children of i(runningProc)
-        pcb[this->runningProc].addChild(indexProcess);
-        //parent = i
-        pcb[this->indexProcess].setParent(this->runningProc);
-        //children = NULL resources = NULL (no need to take care of this)
-        //insert j into RL
-        RL[level].push_back(this->indexProcess);
-        //display: “process j created”
-        //cout<< this->indexProcess <<endl;
-        increIndexProc();
-        scheduler();
-    }
-    void destroy();
-    void request();
-    void release();
     void scheduler(){
         //find highest priority ready process j
         //j: head of highest‐priority non‐empty list (RL)
@@ -144,8 +165,41 @@ public:
         this->runningLevel = levelrunning;
         //display: “process j runningProc”
         cout<<this->runningProc<<" ";
-        
     }
+    void create(int level){
+        //allocate new PCB[j]
+        //state = ready
+        pcb[this->indexProcess].setState(1);
+        //insert j into list of children of i(runningProc)
+        pcb[this->runningProc].addChild(indexProcess);
+        //parent = i
+        pcb[this->indexProcess].setParent(this->runningProc);
+        //children = NULL resources = NULL (no need to take care of this)
+        //insert j into RL
+        RL[level].push_back(this->indexProcess);
+        //display: “process j created”
+        //cout<< this->indexProcess <<endl;
+        increIndexProc();
+        scheduler();
+    }
+    void destroy();
+    void request(int r, int units){
+        if(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units){
+            cout<<"-1 ";
+            return;
+        }
+        if(!rcb[r].request(this->runningProc, units)){
+            //If TRUE, it request successfull
+            //If not, the process is blocked
+            pcb[this->runningProc].setState(0);
+            RL[this->runningLevel].pop_front();
+            scheduler();
+        }else{
+            cout<<this->runningProc<<" ";
+        }
+    }
+    void release();
+    
     void timeout(){
         //move process i from head of RL to end of RL of that level
         if(RL[this->runningLevel].size()==1) {
@@ -227,6 +281,15 @@ int main(){
                 manager.create(level);
             }else if(argms[0]=="to" && argmsize==1){
                 manager.timeout();
+            }else if(argms[0]=="rq" && argmsize==3){
+                int r = stoi(argms[1]);
+                int k = stoi(argms[2]);
+                if(r<0 || r>manager.getTotalLevel()){
+                    cout<<"-1 ";
+                    continue;
+                }
+                manager.request(r,k);
+
             }
             else if(argms[0]=="stop"){
                 isStopped=true;
