@@ -38,6 +38,14 @@ public:
         this->children.clear();
         this->resources.clear();
     }
+    //add child to children list
+    void addChild(int child){
+        this->children.push_back(child);
+    }
+    //receive resource from which RCB
+    void addResource(int rcb){
+        this->resources.push_back(rcb);
+    }
 };
 
 class RCB{
@@ -73,7 +81,7 @@ void getCommands(vector<string>& thisArgs, string str)
         
 }
 class Manager{
-    public:
+private:  
     PCB pcb[16];
     RCB rcb[4];
     deque<int>* RL;
@@ -81,27 +89,58 @@ class Manager{
     int running;
     //index of process that is not yet created
     int indexProcess;
+    //the level of RL
+    int level;
+public:
     Manager(){};
     ~Manager(){
         delete[] RL;
     }
-    void create(int j){
+    int getLevel(){
+        return this->level;
+    }
+    //when create a new process, it needs to increase the index
+    void increIndexProc(){
+        this->indexProcess++;
+    }
+    void create(int level){
         //allocate new PCB[j]
         //state = ready
-        pcb[j].setState(1);
-        //insert j into list of children of i
-        
+        pcb[this->indexProcess].setState(1);
+        //insert j into list of children of i(running)
+        pcb[this->running].addChild(indexProcess);
         //parent = i
-        //children = NULL 
-        //resources = NULL 
+        pcb[this->indexProcess].setParent(this->running);
+        //children = NULL resources = NULL (no need to take care of this)
         //insert j into RL
+        RL[level].push_back(this->indexProcess);
         //display: “process j created”
+        //cout<< this->indexProcess <<endl;
+        increIndexProc();
+        scheduler();
     }
     void destroy();
     void request();
     void release();
     void timeout();
-    void scheduler();
+    void scheduler(){
+        //find highest priority ready process j
+        //j: head of highest‐priority non‐empty list (RL)
+        //real scheduler may perform context switch
+        //implicit in our case:
+        //if currently running process is still the head of the highest‐priority list: 
+        //no context switch
+        //if any function has changed the head of that list: context switch
+        for(int i=1;i<level;i++){
+            if(RL[i].size()>0){
+                this->running =  RL[i].front();
+                break;
+            }
+        }
+        //display: “process j running”
+        cout<<this->running<<" ";
+        
+    }
     //reset all data to init
     void reset(){
         for(int i=0;i<16;i++){
@@ -125,8 +164,10 @@ class Manager{
         RL[0].push_back(0);
         running = 0;
         indexProcess = 1;
+        this->level = level;
         //print the current running process
-        cout<<"0"<<endl;
+        if(first) cout<<"0 ";
+        else cout<<endl<<"0 ";
     };
     void init_default(bool first){
         init(first, 3, 1, 1, 2, 3);
@@ -150,7 +191,7 @@ int main(){
         if(argmsize<=6){
             if(argmsize == 4 || argmsize == 5) {
                 argms.clear();
-                cout<<"Invalid command\n";
+                cout<<"-1"; //incorrect command
                 continue;
             }
             if(argms[0]=="in" && argmsize==6){
@@ -160,12 +201,19 @@ int main(){
             }else if(argms[0]=="id" && argmsize==1){
                 manager.init_default(first);
                 first = false;
+            }else if(argms[0]=="cr" && argmsize==2){
+                int level = stoi(argms[1]);
+                if(level<=0 || level>=manager.getLevel()){
+                    cout<<"-1"; //incorrect priority
+                    continue;
+                }
+                manager.create(level);
             }else if(argms[0]=="stop"){
                 isStopped=true;
             }
         }else{
             argms.clear();
-            cout<<"Invalid command\n";
+            cout<<"-1";//Invalid command
             continue;
         }
         argms.clear();
