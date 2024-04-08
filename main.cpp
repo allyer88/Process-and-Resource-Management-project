@@ -93,15 +93,20 @@ class Manager{
         }
         delete[] RL;
     }
-    void init(int level, int r1, int r2, int r3){
+    void init(int level, int r1, int r2, int r3, int r4){
+        reset();
         pcb[0].setPriority(0);
         rcb[0].setInventory(r1);
         rcb[1].setInventory(r2);
         rcb[2].setInventory(r3);
+        rcb[3].setInventory(r4);
         RL = new deque<int>[level];
-        RL->push_back(0);
+        RL[0].push_back(0);
     };
-    void init_default();
+    void init_default(){
+        init(3, 1, 1, 2, 3);
+    }
+
 };
 
 int main(){
