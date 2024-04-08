@@ -85,19 +85,20 @@ private:
     PCB pcb[16];
     RCB rcb[4];
     deque<int>* RL;
-    //current running process
-    int running;
+    //current runningProc process and its level
+    int runningProc;
+    int runningLevel;
     //index of process that is not yet created
     int indexProcess;
-    //the level of RL
-    int level;
+    //the total level of RL
+    int totalLevel;
 public:
     Manager(){};
     ~Manager(){
         delete[] RL;
     }
-    int getLevel(){
-        return this->level;
+    int getTotalLevel(){
+        return this->totalLevel;
     }
     //when create a new process, it needs to increase the index
     void increIndexProc(){
@@ -107,10 +108,10 @@ public:
         //allocate new PCB[j]
         //state = ready
         pcb[this->indexProcess].setState(1);
-        //insert j into list of children of i(running)
-        pcb[this->running].addChild(indexProcess);
+        //insert j into list of children of i(runningProc)
+        pcb[this->runningProc].addChild(indexProcess);
         //parent = i
-        pcb[this->indexProcess].setParent(this->running);
+        pcb[this->indexProcess].setParent(this->runningProc);
         //children = NULL resources = NULL (no need to take care of this)
         //insert j into RL
         RL[level].push_back(this->indexProcess);
@@ -122,24 +123,39 @@ public:
     void destroy();
     void request();
     void release();
-    void timeout();
     void scheduler(){
         //find highest priority ready process j
         //j: head of highest‐priority non‐empty list (RL)
         //real scheduler may perform context switch
         //implicit in our case:
-        //if currently running process is still the head of the highest‐priority list: 
+        //if currently runningProc process is still the head of the highest‐priority list: 
         //no context switch
         //if any function has changed the head of that list: context switch
-        for(int i=1;i<level;i++){
+        int priProcess = 0;
+        int levelrunning = 0;
+        for(int i=1;i<totalLevel;i++){
             if(RL[i].size()>0){
-                this->running =  RL[i].front();
+                priProcess =  RL[i].front();
+                levelrunning = i;
                 break;
             }
         }
-        //display: “process j running”
-        cout<<this->running<<" ";
+        this->runningProc = priProcess;
+        this->runningLevel = levelrunning;
+        //display: “process j runningProc”
+        cout<<this->runningProc<<" ";
         
+    }
+    void timeout(){
+        //move process i from head of RL to end of RL of that level
+        if(RL[this->runningLevel].size()==1) {
+            cout<<this->runningProc<<" ";
+            return;
+        }
+        int process = RL[this->runningLevel].front();
+        RL[this->runningLevel].pop_front();
+        RL[this->runningLevel].push_back(process);
+        scheduler();
     }
     //reset all data to init
     void reset(){
@@ -162,10 +178,11 @@ public:
         rcb[3].setInventory(r4);
         RL = new deque<int>[level];
         RL[0].push_back(0);
-        running = 0;
+        runningProc = 0;
+        runningLevel = 0;
         indexProcess = 1;
-        this->level = level;
-        //print the current running process
+        this->totalLevel = level;
+        //print the current runningProc process
         if(first) cout<<"0 ";
         else cout<<endl<<"0 ";
     };
@@ -203,12 +220,15 @@ int main(){
                 first = false;
             }else if(argms[0]=="cr" && argmsize==2){
                 int level = stoi(argms[1]);
-                if(level<=0 || level>=manager.getLevel()){
+                if(level<=0 || level>=manager.getTotalLevel()){
                     cout<<"-1"; //incorrect priority
                     continue;
                 }
                 manager.create(level);
-            }else if(argms[0]=="stop"){
+            }else if(argms[0]=="to" && argmsize==1){
+                manager.timeout();
+            }
+            else if(argms[0]=="stop"){
                 isStopped=true;
             }
         }else{
