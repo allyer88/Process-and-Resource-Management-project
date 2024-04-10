@@ -306,6 +306,11 @@ public:
         
     }
     void create(int level){
+        //Error: Creating more than n processes
+        if(indexProcess==16){
+            cout<<"-1 ";
+            return; 
+        }
         //allocate new PCB[j]
         //state = ready
         pcb[this->indexProcess].setState(READY);
@@ -333,7 +338,6 @@ public:
                 break;
             }
         }
-        scheduler(false);
     }
 
     //when delete from the waitlist, next waiting process might able to use the resources
@@ -348,7 +352,6 @@ public:
                 pcb[process].setState(READY);
                 int level = pcb[process].getPriority();
                 RL[level].push_back(process);
-                scheduler(false);
             }
         }
     }
@@ -369,6 +372,8 @@ public:
     //check whether the process that user wants to destroy
     //is current running process or one of its child
     bool hasDestroyError(int process){
+        //Error: cannot destroy process 0
+        if(process==0) return true;
         if(process==runningProc) return false;
         for(int i=0;i<pcb[runningProc].children.size();i++){
             if(pcb[runningProc].children[i]==process) return false;
@@ -382,6 +387,13 @@ public:
             //cout<< "destroy "<< process << "'s child "<< child<<endl;
             recurDestroy(child);
         }
+        //release all resources of j
+        while(pcb[process].resources.size()>0){
+            int r = pcb[process].resources.front().rcb;
+            int unit = pcb[process].resources.front().unit;
+            release(false, r, unit, process);
+            //pcb[process].resources.pop_front();
+        }
         //remove j from RL or waiting list
         //if ready then in RL
         //else is blocked in some resource's waiting list 
@@ -390,13 +402,6 @@ public:
         }else{
             int blockedRCB = pcb[process].getBlockedRCB();
             rmFromWl(blockedRCB, process);
-        }
-        //release all resources of j
-        while(pcb[process].resources.size()>0){
-            int r = pcb[process].resources.front().rcb;
-            int unit = pcb[process].resources.front().unit;
-            release(false, r, unit);
-            pcb[process].resources.pop_front();
         }
         //remove j from parent’s list of children 
         int parent = pcb[process].getParent();
@@ -407,10 +412,11 @@ public:
     }
     void destroy(int process){
         recurDestroy(process);
-        cout<<runningProc<<" ";
+        scheduler(true);
     }
     void request(int r, int units){
-        if(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units){
+        //Error: Process 0 should be prevented from requesting any resource
+        if(runningProc==0||(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units)){
             cout<<"-1 ";
             return;
         }
@@ -427,16 +433,23 @@ public:
         }
         //printinfo();
     }
-    void release(bool printProcess, int r, int releasingunits){
-        
-        int index = 0;
+    void release(bool printProcess, int r, int releasingunits, int process){
+        //if pass -1 mean it is from command rl so it is running process
+        if(process==-1) process = runningProc;
+        int index = -1;
         for(int i=0;i<rcb[r].resources.size();i++){
-            if(this->rcb[r].resources[i].process == runningProc){
+            if(this->rcb[r].resources[i].process == process){
                 index = i;
                 break;
             }
         }
+        if(index==-1){
+            //Error: Releasing a resource the process is not holding
+            cout<<"-1 Error: Releasing a resource the process is not holding";
+            return;
+        }
         int holdingunits = rcb[r].resources[index].resource;
+        //Error: number of units released must ≤ number of units currently held
         if(releasingunits>holdingunits){
             cout<<"-1 ";
             return;
@@ -446,7 +459,7 @@ public:
             //remove (r, k) from rcb[r].resources
             this->rcb[r].resources.erase(rcb[r].resources.begin()+index);
             //remove resource from resourse list in running process
-            pcb[runningProc].rmResource(r);
+            pcb[process].rmResource(r);
         }else{
             this->rcb[r].resources[index].resource-=releasingunits;
         }
@@ -550,21 +563,16 @@ int main(int argc, char* argv[]){
     }
     string command;
     vector<string> argms;
-    //get the command from users
-    bool isStopped = false;
     Manager manager;
     int first = true;
     while(getline(inputFile, command)){
+        //if it is a newline
+        if(command.empty()) continue;
         //get each word from command
         getCommands(argms, command);
         int argmsize = argms.size();
         //cout<<"argument size:" <<argmsize<<endl;
         if(argmsize<=6){
-            if(argmsize == 4 || argmsize == 5) {
-                argms.clear();
-                cout<<"-1"; //incorrect command
-                continue;
-            }
             if(argms[0]=="in" && argmsize==6){
                 //stoi turn string to int
                 manager.init(first, stoi(argms[1]),stoi(argms[2]),stoi(argms[3]),stoi(argms[4]),stoi(argms[5]));
@@ -574,8 +582,9 @@ int main(int argc, char* argv[]){
                 first = false;
             }else if(argms[0]=="cr" && argmsize==2){
                 int level = stoi(argms[1]);
+                //Error: 0 is reserved for process 0, so no level 1
                 if(level<=0 || level>=manager.getTotalLevel()){
-                    cout<<"-1"; //incorrect priority
+                    cout<<"-1 "; //incorrect priority
                     continue;
                 }
                 manager.create(level);
@@ -584,7 +593,8 @@ int main(int argc, char* argv[]){
             }else if(argms[0]=="rq" && argmsize==3){
                 int r = stoi(argms[1]);
                 int k = stoi(argms[2]);
-                if(r<0 || r>manager.getTotalLevel()){
+                //Error: Requesting a nonexistent resource
+                if(r<0 || r>=4){
                     cout<<"-1 ";
                     continue;
                 }
@@ -592,24 +602,28 @@ int main(int argc, char* argv[]){
             }else if(argms[0]=="rl" && argmsize==3){
                 int r = stoi(argms[1]);
                 int k = stoi(argms[2]);
-                if(r<0 || r>manager.getTotalLevel()){
+                if(r<0 || r>=4){
                     cout<<"-1 ";
                     continue;
                 }
-                manager.release(true,r,k);
+                manager.release(true,r,k,-1);
             }else if(argms[0]=="de" && argmsize==2){ 
+                //Error: Destroying a process that is not a child of the current process
                 if(manager.hasDestroyError(stoi(argms[1]))){
                     cout<<"-1 ";
                     continue;
                 }
                 manager.destroy(stoi(argms[1]));
-            }
-            else if(argms[0]=="stop"){
-                isStopped=true;
+            }else{
+                argms.clear();
+                //Error: invalid command
+                cout<<"-1"; 
+                continue;
             }
         }else{
             argms.clear();
-            cout<<"-1";//Invalid command
+            //Error: invalid command
+            cout<<"-1";
             continue;
         }
         argms.clear();
