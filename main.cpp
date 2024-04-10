@@ -11,16 +11,18 @@ private:
     int state;
     int parent;
     int priority;
-    deque<int> children;
-    deque<int> resources;
+    int blockedRCB;
 public:
+    deque<int> children;
+    deque<RR> resources;
     //1 means ready
     //0 means block
-    //-1 means new(not yet created)
+    //-1 means free(not yet created)
     PCB(){
         this->state = -1;
         this->parent = -1;//if it is 
         this->priority= -1;
+        this->blockedRCB = -1;
     };
     void setState(int state){
         this->state = state;
@@ -31,13 +33,23 @@ public:
     void setPriority(int priority){
         this->priority=priority;
     }
+    void setBlockedRCB(int rcb){
+        this->blockedRCB=rcb;
+    }
+    int getBlockedRCB(){
+        return this->blockedRCB;
+    }
     int getPriority(){
         return this->priority;
+    }
+    int getState(){
+        return this->state;
     }
     void reset(){
         this->state = -1;
         this->parent = -1;
         this->priority= -1;
+        this->blockedRCB=-1;
         this->children.clear();
         this->resources.clear();
     }
@@ -46,12 +58,12 @@ public:
         this->children.push_back(child);
     }
     //receive resource from which RCB
-    void addResource(int rcb){
+    void addResource(RR rcb){
         this->resources.push_back(rcb);
     }
     void rmResource(int rs){
         for(int i=0;i<resources.size();i++){
-            if(resources[i]==rs){
+            if(resources[i].rcb==rs){
                 resources.erase(resources.begin()+i);
                 break;
             }
@@ -64,6 +76,14 @@ struct PR{
     PR(int p, int r){
         process=p;
         resource=r;
+    }
+};
+struct RR{
+    int rcb;
+    int unit;
+    RR(int r, int u){
+        rcb=r;
+        unit = u;
     }
 };
 class RCB{
@@ -111,7 +131,7 @@ public:
             getResource(pr);
             return true;
         }
-        addWaitlist(pr);  
+        addWaitlist(pr); 
         return false;
     }
     void release(int process, int releasingunits){
@@ -236,7 +256,53 @@ public:
         increIndexProc();
         scheduler();
     }
-    void destroy();
+    void rmFromRL(int process){
+        int level=pcb[process].getPriority();
+        int size = RL[level].size();
+        for(int i=0;i<size;i++){
+            if(RL[level][i]==process){
+                RL[level].erase(RL[level].begin()+i);
+                break;
+            }
+        }
+    }
+    void rmFromWl(int r, int process){
+        int size = rcb[r].waitlist.size();
+        for(int i=0;i<size;i++){
+            if(rcb[r].waitlist[i].process==process){
+                rcb[r].waitlist.erase(rcb[r].waitlist.begin()+i);
+                break;
+            }
+        }
+    }
+    void destroy(int process){
+        //destroy its child
+        while(pcb[process].children.size()>0){
+            int child = pcb[process].children.front(); 
+            destroy(child);
+            //remove j from RL or waiting list
+            //if ready then in RL
+            //else is blocked in some resource's waiting list 
+            if(pcb[child].getState()==1){
+                rmFromRL(child);
+            }else{
+                int blockedRCB = pcb[child].getBlockedRCB();
+                rmFromWl(blockedRCB, child);
+            }
+            //release all resources of j
+            while(pcb[child].resources.size()>0){
+                int r = pcb[child].resources.front().rcb;
+                int unit = pcb[child].resources.front().unit;
+                release(r, unit);
+                pcb[child].resources.pop_front();
+            }
+            //free PCB of j
+            pcb[child].reset();
+            //remove j from parent’s list of children 
+            pcb[process].children.pop_front();
+            //destroy child's child
+        }  
+    }
     void request(int r, int units){
         if(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units){
             cout<<"-1 ";
@@ -246,6 +312,7 @@ public:
             //If TRUE, it request successfull
             //If not, the process is blocked
             pcb[this->runningProc].setState(0);
+            pcb[this->runningProc].setBlockedRCB(r);
             RL[this->runningLevel].pop_front();
             scheduler();
         }else{
@@ -295,9 +362,11 @@ public:
                 //r.free = r.free - k
                 rcb[r].getResource(PR(pr,rs));
                 //insert r into j.resources
-                pcb[pr].addResource(r);
+                pcb[pr].addResource(RR(r,rs));
                 //j.state = ready
                 pcb[pr].setState(1);
+                //remove block rcb data
+                pcb[pr].setBlockedRCB(-1);
                 //remove (j, k) from r.waitlist
                 rcb[r].waitlist.pop_front();
                 //insert j into RL
