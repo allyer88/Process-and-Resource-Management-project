@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <fstream>
 //pcb state
 #define READY 1
 #define BLOCKED 0
@@ -535,16 +536,25 @@ public:
     }
 };
 
-int main(){
+int main(int argc, char* argv[]){
+    if(argc!=2){
+        cout<<"Please enter './main input.txt' to run the program\n";
+        return 0;
+    }
+    string filename = argv[1];
+    // Open the input file
+    ifstream inputFile(filename);
+    if (!inputFile) {
+        cerr << "Error: Unable to open the file." << endl;
+        return 0;
+    }
     string command;
     vector<string> argms;
     //get the command from users
     bool isStopped = false;
     Manager manager;
     int first = true;
-    while(!isStopped){
-        cout<< "> ";
-        getline(cin, command);
+    while(getline(inputFile, command)){
         //get each word from command
         getCommands(argms, command);
         int argmsize = argms.size();
@@ -604,5 +614,6 @@ int main(){
         }
         argms.clear();
     }
+    inputFile.close();
     return 0;
 }
