@@ -91,8 +91,15 @@ public:
         this->children.push_back(child);
     }
     //receive resource from which RCB
-    void addResource(RR rcb){
-        this->resources.push_back(rcb);
+    void addResource(RR r){
+        //if the process request the same resource later
+        for(int i=0;i<resources.size();i++){
+            if(resources[i].rcb == r.rcb){
+                resources[i].unit+=r.unit;
+                return;
+            }
+        }
+        this->resources.push_back(r);
     }
     void rmResource(int rs){
         for(int i=0;i<resources.size();i++){
@@ -160,7 +167,15 @@ public:
         //this process can get resource
         this->freeInventory -= pr.resource;
         this->UsingInventory += pr.resource;
-        this->resources.push_back(pr);
+        int again=false;
+        for(int i=0;i<this->resources.size();i++){
+            if(this->resources[i].process==pr.process){
+                this->resources[i].resource+=pr.resource;
+                again=true;
+                break;
+            }
+        }
+        if(!again) this->resources.push_back(pr);
         if(this->freeInventory==0){
             this->state = AllOCATED;
         }
@@ -414,6 +429,7 @@ public:
         recurDestroy(process);
         scheduler(true);
     }
+
     void request(int r, int units){
         //Error: Process 0 should be prevented from requesting any resource
         if(runningProc==0||(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units)){
@@ -462,6 +478,12 @@ public:
             pcb[process].rmResource(r);
         }else{
             this->rcb[r].resources[index].resource-=releasingunits;
+            for(int i=0;i<pcb[process].resources.size();i++){
+                if(pcb[process].resources[index].rcb==r){
+                    pcb[process].resources[index].unit-=releasingunits;
+                    break;
+                }
+            }
         }
         //r.free = r.free + k
         rcb[r].setFreeInventory(rcb[r].getFreeInventory()+releasingunits);
