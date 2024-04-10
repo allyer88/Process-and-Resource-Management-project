@@ -305,10 +305,12 @@ public:
         //allocate new PCB[j]
         //state = ready
         pcb[this->indexProcess].setState(READY);
-        //insert j into list of children of i(runningProc)
-        pcb[this->runningProc].addChild(indexProcess);
+        //set its priority
+        pcb[this->indexProcess].setPriority(level);
         //parent = i
         pcb[this->indexProcess].setParent(this->runningProc);
+        //insert j into list of children of i(runningProc)
+        pcb[this->runningProc].addChild(indexProcess);
         //children = NULL resources = NULL (no need to take care of this)
         //insert j into RL
         RL[level].push_back(this->indexProcess);
@@ -316,7 +318,7 @@ public:
         //cout<< this->indexProcess <<endl;
         increIndexProc();
         scheduler();
-        printinfo();
+        //printinfo();
     }
     void rmFromRL(int process){
         int level=pcb[process].getPriority();
@@ -336,6 +338,15 @@ public:
                 break;
             }
         }
+    }
+    //check whether the process that user wants to destroy
+    //is current running process or one of its child
+    bool hasDestroyError(int process){
+        if(process==runningProc) return false;
+        for(int i=0;i<pcb[runningProc].children.size();i++){
+            if(pcb[runningProc].children[i]==process) return false;
+        }
+        return true;
     }
     void destroy(int process){
         //destroy its child
@@ -360,11 +371,12 @@ public:
             release(r, unit);
             pcb[process].resources.pop_front();
         }
-        //free PCB of j
-        pcb[process].reset();
         //remove j from parent’s list of children 
         int parent = pcb[process].getParent();
         pcb[parent].children.pop_front();
+        //free PCB of j
+        pcb[process].reset();
+        //printinfo();
     }
     void request(int r, int units){
         if(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units){
@@ -382,7 +394,7 @@ public:
             pcb[this->runningProc].addResource(RR(r, units));
             cout<<this->runningProc<<" ";
         }
-        printinfo();
+        //printinfo();
     }
     void release(int r, int releasingunits){
         
@@ -442,7 +454,7 @@ public:
             }
         }
         scheduler();
-        printinfo();
+        //printinfo();
     }
     
     void timeout(){
@@ -455,7 +467,7 @@ public:
         RL[this->runningLevel].pop_front();
         RL[this->runningLevel].push_back(process);
         scheduler();
-        printinfo();
+        //printinfo();
     }
     //reset all data to init
     void reset(){
@@ -486,7 +498,7 @@ public:
         //print the current runningProc process
         if(first) cout<<"0 ";
         else cout<<endl<<"0 ";
-        printinfo();
+        //printinfo();
     };
     void init_default(bool first){
         init(first, 3, 1, 1, 2, 3);
@@ -545,7 +557,11 @@ int main(){
                     continue;
                 }
                 manager.release(r,k);
-            }else if(argms[0]=="de" && argmsize==2){
+            }else if(argms[0]=="de" && argmsize==2){ 
+                if(manager.hasDestroyError(stoi(argms[1]))){
+                    cout<<"-1 ";
+                    continue;
+                }
                 manager.destroy(stoi(argms[1]));
             }
             else if(argms[0]=="stop"){
