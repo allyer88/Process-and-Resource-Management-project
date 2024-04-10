@@ -277,7 +277,7 @@ public:
     void increIndexProc(){
         this->indexProcess++;
     }
-    void scheduler(){
+    void scheduler(bool printProcess){
         //find highest priority ready process j
         //j: head of highest‐priority non‐empty list (RL)
         //real scheduler may perform context switch
@@ -299,7 +299,10 @@ public:
             this->runningLevel = levelrunning;
         }
         //display: “process j runningProc”
-        cout<<this->runningProc<<" ";
+        if(printProcess){
+            cout<<this->runningProc<<" ";
+        }
+        
     }
     void create(int level){
         //allocate new PCB[j]
@@ -317,7 +320,7 @@ public:
         //display: “process j created”
         //cout<< this->indexProcess <<endl;
         increIndexProc();
-        scheduler();
+        scheduler(true);
         //printinfo();
     }
     void rmFromRL(int process){
@@ -329,15 +332,38 @@ public:
                 break;
             }
         }
+        scheduler(false);
+    }
+
+    //when delete from the waitlist, next waiting process might able to use the resources
+    void checkNextWLAvailable(int r){
+        while(rcb[r].getFreeInventory()>0){
+            int requestUnit = rcb[r].waitlist.front().resource;
+            int process = rcb[r].waitlist.front().process;
+            if(rcb[r].getFreeInventory()>=requestUnit){
+                rcb[r].getResource(rcb[r].waitlist.front());
+                pcb[process].addResource(RR(r, requestUnit));
+                pcb[process].setBlockedRCB(-1);//not block
+                pcb[process].setState(READY);
+                int level = pcb[process].getPriority();
+                RL[level].push_back(process);
+                scheduler(false);
+            }
+        }
     }
     void rmFromWl(int r, int process){
         int size = rcb[r].waitlist.size();
         for(int i=0;i<size;i++){
             if(rcb[r].waitlist[i].process==process){
                 rcb[r].waitlist.erase(rcb[r].waitlist.begin()+i);
+                //if the process is the front of waitlist, next process might able to get the resources
+                if(i==0){
+                    checkNextWLAvailable(r);
+                }
                 break;
             }
         }
+        
     }
     //check whether the process that user wants to destroy
     //is current running process or one of its child
@@ -348,12 +374,12 @@ public:
         }
         return true;
     }
-    void destroy(int process){
+    void recurDestroy(int process){
         //destroy its child
         while(pcb[process].children.size()>0){
             int child = pcb[process].children.front(); 
-            cout<< "destroy "<< process << "'s child "<< child<<endl;
-            destroy(child);
+            //cout<< "destroy "<< process << "'s child "<< child<<endl;
+            recurDestroy(child);
         }
         //remove j from RL or waiting list
         //if ready then in RL
@@ -368,7 +394,7 @@ public:
         while(pcb[process].resources.size()>0){
             int r = pcb[process].resources.front().rcb;
             int unit = pcb[process].resources.front().unit;
-            release(r, unit);
+            release(false, r, unit);
             pcb[process].resources.pop_front();
         }
         //remove j from parent’s list of children 
@@ -377,6 +403,10 @@ public:
         //free PCB of j
         pcb[process].reset();
         //printinfo();
+    }
+    void destroy(int process){
+        recurDestroy(process);
+        cout<<runningProc<<" ";
     }
     void request(int r, int units){
         if(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units){
@@ -389,14 +419,14 @@ public:
             pcb[this->runningProc].setState(BLOCKED);
             pcb[this->runningProc].setBlockedRCB(r);
             RL[this->runningLevel].pop_front();
-            scheduler();
+            scheduler(true);
         }else{
             pcb[this->runningProc].addResource(RR(r, units));
             cout<<this->runningProc<<" ";
         }
         //printinfo();
     }
-    void release(int r, int releasingunits){
+    void release(bool printProcess, int r, int releasingunits){
         
         int index = 0;
         for(int i=0;i<rcb[r].resources.size();i++){
@@ -453,7 +483,7 @@ public:
                 canRequest=false;
             }
         }
-        scheduler();
+        scheduler(printProcess);
         //printinfo();
     }
     
@@ -466,7 +496,7 @@ public:
         int process = RL[this->runningLevel].front();
         RL[this->runningLevel].pop_front();
         RL[this->runningLevel].push_back(process);
-        scheduler();
+        scheduler(true);
         //printinfo();
     }
     //reset all data to init
@@ -556,7 +586,7 @@ int main(){
                     cout<<"-1 ";
                     continue;
                 }
-                manager.release(r,k);
+                manager.release(true,r,k);
             }else if(argms[0]=="de" && argmsize==2){ 
                 if(manager.hasDestroyError(stoi(argms[1]))){
                     cout<<"-1 ";
