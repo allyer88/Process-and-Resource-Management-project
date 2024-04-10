@@ -3,9 +3,22 @@
 #include <string>
 #include <sstream>
 #include <vector>
-
+//pcb state
+#define READY 1
+#define BLOCKED 0
+#define NEW -1
+//rcb state
+#define FREE 1
+#define AllOCATED 0
 using namespace std;
-
+struct RR{
+    int rcb;
+    int unit;
+    RR(int r, int u){
+        rcb=r;
+        unit = u;
+    }
+};
 class PCB{
 private:
     int state;
@@ -18,8 +31,24 @@ public:
     //1 means ready
     //0 means block
     //-1 means free(not yet created)
+    void printInfo(){
+        cout<<"state: "<<state<<endl;
+        cout<<"parent: "<<parent<<endl;
+        cout<<"priority: "<<priority<<endl;
+        cout<<"blocked RCB: "<<blockedRCB<<endl;
+        cout<<"children: ";
+        for(int i=0;i<children.size();i++){
+            cout<<children[i]<<" ";
+        }
+        cout<<endl;
+        cout<<"resources: ";
+        for(int i=0;i<resources.size();i++){
+            cout<<"("<<resources[i].rcb<<", "<< resources[i].unit<<")\n";
+        }
+        cout<<endl;
+    }
     PCB(){
-        this->state = -1;
+        this->state = NEW;
         this->parent = -1;//if it is 
         this->priority= -1;
         this->blockedRCB = -1;
@@ -45,8 +74,11 @@ public:
     int getState(){
         return this->state;
     }
+    int getParent(){
+        return this->parent;
+    }
     void reset(){
-        this->state = -1;
+        this->state = NEW;
         this->parent = -1;
         this->priority= -1;
         this->blockedRCB=-1;
@@ -78,14 +110,7 @@ struct PR{
         resource=r;
     }
 };
-struct RR{
-    int rcb;
-    int unit;
-    RR(int r, int u){
-        rcb=r;
-        unit = u;
-    }
-};
+
 class RCB{
 private:
     int state;
@@ -99,10 +124,25 @@ public:
     RCB(){
         //1 free
         //0 allocated
-        this->state = 1;
+        this->state = FREE;
         this->freeInventory = 0;
         this->UsingInventory = 0;
     };
+    void printInfo(){
+        cout<<"state: "<<state<<endl;
+        cout<<"How many free resources: "<<freeInventory<<endl;
+        cout<<"How many allocated resources: "<<UsingInventory<<endl;
+        cout<<"wailtlist: ";
+        for(int i=0;i<waitlist.size();i++){
+            cout<<"("<<waitlist[i].process<<", "<< waitlist[i].resource<<")\n";
+        }
+        cout<<endl;
+        cout<<"PCB using resources: ";
+        for(int i=0;i<resources.size();i++){
+            cout<<"("<<resources[i].process<<", "<< resources[i].resource<<")\n";
+        }
+        cout<<endl;
+    }
     int getState(){
         return this->state;
     }
@@ -121,7 +161,7 @@ public:
         this->UsingInventory += pr.resource;
         this->resources.push_back(pr);
         if(this->freeInventory==0){
-            this->state = 0;
+            this->state = AllOCATED;
         }
     }
     //if no error, it can request
@@ -152,8 +192,8 @@ public:
         freeInventory+=releasingunits;
         UsingInventory-=releasingunits;
         //state check
-        if(this->state==0){
-            this->state=1;
+        if(this->state==AllOCATED){
+            this->state=FREE;
         }
     }
     bool canRequest(int request){
@@ -167,10 +207,11 @@ public:
     }
     //erase the data
     void reset(){
-        this->state = 1;
+        this->state = FREE;
         this->freeInventory = 0;
         this->UsingInventory = 0;
         this->waitlist.clear();
+        this->resources.clear();
     }
     void addWaitlist(PR pr){
         this->waitlist.push_back(pr);
@@ -212,6 +253,26 @@ public:
     int getTotalLevel(){
         return this->totalLevel;
     }
+    void printinfo(){
+        cout<<"Current running process is: "<<runningProc<<endl;
+        for(int i=0;i<indexProcess;i++){
+            cout<<"PCB "<<i<<": "<<endl;
+            pcb[i].printInfo();
+        }
+        cout<<endl;
+        for(int i=0;i<4;i++){
+            cout<<"RCB "<<i<<": "<<endl;
+            rcb[i].printInfo();
+        }
+        cout<<endl;
+        for(int i=0;i<totalLevel;i++){
+            cout<<"RL level "<<i<<": ";
+            for(int j=0;j<RL[i].size();j++){
+                cout<<RL[i][j]<<" ";
+            }
+            cout<<endl;
+        }
+    }
     //when create a new process, it needs to increase the index
     void increIndexProc(){
         this->indexProcess++;
@@ -226,7 +287,7 @@ public:
         //if any function has changed the head of that list: context switch
         int priProcess = 0;
         int levelrunning = 0;
-        for(int i=1;i<totalLevel;i++){
+        for(int i=totalLevel-1;i>=0;i--){
             if(RL[i].size()>0){
                 priProcess = RL[i].front();
                 levelrunning = i;
@@ -243,7 +304,7 @@ public:
     void create(int level){
         //allocate new PCB[j]
         //state = ready
-        pcb[this->indexProcess].setState(1);
+        pcb[this->indexProcess].setState(READY);
         //insert j into list of children of i(runningProc)
         pcb[this->runningProc].addChild(indexProcess);
         //parent = i
@@ -255,6 +316,7 @@ public:
         //cout<< this->indexProcess <<endl;
         increIndexProc();
         scheduler();
+        printinfo();
     }
     void rmFromRL(int process){
         int level=pcb[process].getPriority();
@@ -279,29 +341,30 @@ public:
         //destroy its child
         while(pcb[process].children.size()>0){
             int child = pcb[process].children.front(); 
+            cout<< "destroy "<< process << "'s child "<< child<<endl;
             destroy(child);
-            //remove j from RL or waiting list
-            //if ready then in RL
-            //else is blocked in some resource's waiting list 
-            if(pcb[child].getState()==1){
-                rmFromRL(child);
-            }else{
-                int blockedRCB = pcb[child].getBlockedRCB();
-                rmFromWl(blockedRCB, child);
-            }
-            //release all resources of j
-            while(pcb[child].resources.size()>0){
-                int r = pcb[child].resources.front().rcb;
-                int unit = pcb[child].resources.front().unit;
-                release(r, unit);
-                pcb[child].resources.pop_front();
-            }
-            //free PCB of j
-            pcb[child].reset();
-            //remove j from parent’s list of children 
-            pcb[process].children.pop_front();
-            //destroy child's child
-        }  
+        }
+        //remove j from RL or waiting list
+        //if ready then in RL
+        //else is blocked in some resource's waiting list 
+        if(pcb[process].getState()==READY){
+            rmFromRL(process);
+        }else{
+            int blockedRCB = pcb[process].getBlockedRCB();
+            rmFromWl(blockedRCB, process);
+        }
+        //release all resources of j
+        while(pcb[process].resources.size()>0){
+            int r = pcb[process].resources.front().rcb;
+            int unit = pcb[process].resources.front().unit;
+            release(r, unit);
+            pcb[process].resources.pop_front();
+        }
+        //free PCB of j
+        pcb[process].reset();
+        //remove j from parent’s list of children 
+        int parent = pcb[process].getParent();
+        pcb[parent].children.pop_front();
     }
     void request(int r, int units){
         if(rcb[r].getFreeInventory()+rcb[r].getUsingInventory()< units){
@@ -311,13 +374,15 @@ public:
         if(!rcb[r].request(this->runningProc, units)){
             //If TRUE, it request successfull
             //If not, the process is blocked
-            pcb[this->runningProc].setState(0);
+            pcb[this->runningProc].setState(BLOCKED);
             pcb[this->runningProc].setBlockedRCB(r);
             RL[this->runningLevel].pop_front();
             scheduler();
         }else{
+            pcb[this->runningProc].addResource(RR(r, units));
             cout<<this->runningProc<<" ";
         }
+        printinfo();
     }
     void release(int r, int releasingunits){
         
@@ -346,8 +411,8 @@ public:
         rcb[r].setFreeInventory(rcb[r].getFreeInventory()+releasingunits);
         rcb[r].setUsingInventory(rcb[r].getUsingInventory()-releasingunits);
         //state check
-        if(rcb[r].getState()==0){
-            rcb[r].setState(1);
+        if(rcb[r].getState()==AllOCATED){
+            rcb[r].setState(FREE);
         }
         bool canRequest = true;
         int pr;
@@ -364,7 +429,7 @@ public:
                 //insert r into j.resources
                 pcb[pr].addResource(RR(r,rs));
                 //j.state = ready
-                pcb[pr].setState(1);
+                pcb[pr].setState(READY);
                 //remove block rcb data
                 pcb[pr].setBlockedRCB(-1);
                 //remove (j, k) from r.waitlist
@@ -377,6 +442,7 @@ public:
             }
         }
         scheduler();
+        printinfo();
     }
     
     void timeout(){
@@ -389,6 +455,7 @@ public:
         RL[this->runningLevel].pop_front();
         RL[this->runningLevel].push_back(process);
         scheduler();
+        printinfo();
     }
     //reset all data to init
     void reset(){
@@ -405,6 +472,7 @@ public:
         if(!first) reset();
         //set value
         pcb[0].setPriority(0);
+        pcb[0].setState(READY);
         rcb[0].setFreeInventory(r1);
         rcb[1].setFreeInventory(r2);
         rcb[2].setFreeInventory(r3);
@@ -418,6 +486,7 @@ public:
         //print the current runningProc process
         if(first) cout<<"0 ";
         else cout<<endl<<"0 ";
+        printinfo();
     };
     void init_default(bool first){
         init(first, 3, 1, 1, 2, 3);
@@ -476,6 +545,8 @@ int main(){
                     continue;
                 }
                 manager.release(r,k);
+            }else if(argms[0]=="de" && argmsize==2){
+                manager.destroy(stoi(argms[1]));
             }
             else if(argms[0]=="stop"){
                 isStopped=true;
