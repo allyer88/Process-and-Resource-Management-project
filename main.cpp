@@ -445,7 +445,7 @@ public:
         }
         if(index==-1){
             //Error: Releasing a resource the process is not holding
-            cout<<"-1 Error: Releasing a resource the process is not holding";
+            cout<<"-1 ";
             return;
         }
         int holdingunits = rcb[r].resources[index].resource;
@@ -558,7 +558,7 @@ int main(int argc, char* argv[]){
     // Open the input file
     ifstream inputFile(filename);
     if (!inputFile) {
-        cerr << "Error: Unable to open the file." << endl;
+        cout << "Error: Unable to open the file." << endl;
         return 0;
     }
     string command;
@@ -584,7 +584,8 @@ int main(int argc, char* argv[]){
                 int level = stoi(argms[1]);
                 //Error: 0 is reserved for process 0, so no level 1
                 if(level<=0 || level>=manager.getTotalLevel()){
-                    cout<<"-1 "; //incorrect priority
+                    cout<<"-1 ";
+                    argms.clear(); //incorrect priority
                     continue;
                 }
                 manager.create(level);
@@ -596,6 +597,7 @@ int main(int argc, char* argv[]){
                 //Error: Requesting a nonexistent resource
                 if(r<0 || r>=4){
                     cout<<"-1 ";
+                    argms.clear();
                     continue;
                 }
                 manager.request(r,k);
@@ -604,6 +606,7 @@ int main(int argc, char* argv[]){
                 int k = stoi(argms[2]);
                 if(r<0 || r>=4){
                     cout<<"-1 ";
+                    argms.clear();
                     continue;
                 }
                 manager.release(true,r,k,-1);
@@ -611,19 +614,20 @@ int main(int argc, char* argv[]){
                 //Error: Destroying a process that is not a child of the current process
                 if(manager.hasDestroyError(stoi(argms[1]))){
                     cout<<"-1 ";
+                    argms.clear();
                     continue;
                 }
                 manager.destroy(stoi(argms[1]));
             }else{
                 argms.clear();
                 //Error: invalid command
-                cout<<"-1"; 
+                cout<<"-1 "; 
                 continue;
             }
         }else{
             argms.clear();
             //Error: invalid command
-            cout<<"-1";
+            cout<<"-1 ";
             continue;
         }
         argms.clear();
