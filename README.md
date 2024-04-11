@@ -18,4 +18,5 @@ Redirecting output to a file:
 ```
 2. 
 main.cpp: The source code of the project
+
 output.txt: The output file
