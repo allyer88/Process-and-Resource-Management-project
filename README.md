@@ -1,17 +1,21 @@
-To compile the program:
+1.
+Compiling the program:
 
 ```
 g++ main.cpp -o main
 ```
 
-then to run the program(change the filename in []):
+Running the program(change the filename in []):
 
 ```
 ./main [input].txt
 ```
 
-If you want to output to a file:
+Redirecting output to a file:
 
 ```
 ./main [input].txt > output.txt
 ```
+2. 
+main.cpp: The source code of the project
+output.txt: The output file
