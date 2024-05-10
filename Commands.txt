@@ -1,0 +1,25 @@
+Commands
+
+• in <n> <u0> <u1> <u2> <u3>
+Restore the system to its initial state, with a ready queue supporting n priority levels and
+with an inventory of <u0> units for resource 0, <u1> units for resource 1, <u2> units for
+resource 2,<u3> units for resource 3.
+• id
+Restore the system to its initial state, with default values for number of priority levels on
+ready queue and resource inventories. Equivalent to in 3 1 1 2 3
+• cr <p>
+Invoke function create(), which creates a new process at the priority level <p>;
+<p> can be 1 or 2 (0 is reserved for init process)
+• de <i>
+Invoke the function destroy(), which destroy the process identified by the PCB index <i>,
+and all of its descendants
+• rq <r> <k>
+Invoke the function request(), which requests <k> units of resource <r>;
+<r> can be 0, 1, 2, or 3.
+• rl <r> <k>
+Invoke the function release(), which release the resource <r>;
+<r> can be 0, 1, 2, or 3; <k> is the number of units to be released
+• to
+Invoke the function timeout().
+
+Sources from Professor Michael Dillencourt at UCI
